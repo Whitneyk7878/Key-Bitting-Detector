@@ -1,5 +1,7 @@
 # Key-Bitting-Detector
 
+DROP AN IMAGE OF A KEY IN THE TOOL AND MEASURE THE BITTING!
+
 
 This tool has templates for almost every single key brand and model
 and allows you to drag key bitting depth charts over your key image to 
