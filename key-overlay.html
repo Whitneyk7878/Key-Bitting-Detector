@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Key Decode Overlay</title>
+<style>
+  :root{
+    --bg:#15181d; --panel:#1d2128; --panel2:#242933; --line:#333a45;
+    --fg:#e7eaf0; --muted:#98a2b3; --accent:#2fa8ff; --accent2:#ffb020;
+    --ok:#36c07a;
+    font-size:15px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    display:flex; overflow:hidden;
+  }
+  /* ---------- sidebar ---------- */
+  aside{
+    width:310px; flex:0 0 310px; background:var(--panel); border-right:1px solid var(--line);
+    display:flex; flex-direction:column; overflow-y:auto;
+  }
+  aside h1{
+    font-size:1rem; margin:0; padding:14px 16px; letter-spacing:.3px;
+    border-bottom:1px solid var(--line); background:var(--panel2);
+  }
+  aside h1 small{display:block; font-weight:400; color:var(--muted); font-size:.74rem; margin-top:3px}
+  .grp{padding:12px 16px; border-bottom:1px solid var(--line)}
+  .grp > label.hdr{
+    display:block; font-size:.7rem; text-transform:uppercase; letter-spacing:.09em;
+    color:var(--muted); margin-bottom:7px;
+  }
+  select,input[type=file],button{
+    width:100%; background:var(--panel2); color:var(--fg);
+    border:1px solid var(--line); border-radius:7px; padding:7px 9px; font:inherit; font-size:.86rem;
+  }
+  select,button{cursor:pointer}
+  button:hover{border-color:var(--accent); color:var(--accent)}
+  input[type=file]{padding:6px; font-size:.76rem}
+  input[type=file]::file-selector-button{
+    background:var(--line); color:var(--fg); border:0; border-radius:5px;
+    padding:4px 9px; margin-right:8px; cursor:pointer; font:inherit; font-size:.76rem;
+  }
+  .row{display:flex; align-items:center; gap:9px; margin:9px 0}
+  .row label{flex:0 0 74px; font-size:.78rem; color:var(--muted)}
+  .row input[type=range]{flex:1; accent-color:var(--accent); min-width:0}
+  .row output{
+    flex:0 0 52px; text-align:right; font-variant-numeric:tabular-nums;
+    font-size:.74rem; color:var(--fg); font-family:ui-monospace,monospace;
+  }
+  .btns{display:flex; gap:8px; margin-top:4px}
+  .hint{font-size:.74rem; color:var(--muted); line-height:1.55}
+  .hint b{color:var(--fg); font-weight:600}
+  .hint kbd{
+    background:var(--panel2); border:1px solid var(--line); border-bottom-width:2px;
+    border-radius:4px; padding:0 4px; font-family:ui-monospace,monospace; font-size:.9em; color:var(--fg);
+  }
+  ol.steps{margin:0; padding-left:17px; font-size:.76rem; color:var(--muted); line-height:1.65}
+  ol.steps b{color:var(--fg)}
+  ol.steps .t{color:var(--accent)}
+  .ref a{
+    display:block; color:var(--accent); text-decoration:none; font-size:.78rem;
+    padding:3px 0; border-bottom:1px dotted transparent;
+  }
+  .ref a:hover{border-bottom-color:var(--accent)}
+  /* ---------- stage ---------- */
+  main{flex:1; position:relative; overflow:hidden; background:#0e1116; min-width:0}
+  #view{position:absolute; inset:0; transform-origin:0 0; will-change:transform}
+  #photo{position:absolute; top:0; left:0; user-select:none; -webkit-user-drag:none; display:none}
+  #tpl{
+    position:absolute; top:0; left:0; transform-origin:0 0; cursor:grab;
+    user-select:none; -webkit-user-drag:none; display:none;
+    filter:drop-shadow(0 0 1px rgba(255,255,255,.55));
+  }
+  #tpl.drag{cursor:grabbing}
+  .cal{position:absolute; left:0; top:0; display:none; pointer-events:none; transform-origin:0 0; z-index:5}
+  .cal i{position:absolute; background:var(--accent2); box-shadow:0 0 0 1px rgba(0,0,0,.7)}
+  .cal i.h{left:-15px; top:-1px; width:30px; height:2px}
+  .cal i.v{left:-1px; top:-15px; width:2px; height:30px}
+  body.calibrating #main{cursor:crosshair}
+  body.calibrating #tpl{pointer-events:none}
+  #calmsg{
+    position:absolute; left:50%; top:14px; transform:translateX(-50%);
+    background:var(--accent2); color:#201701; font-weight:600; font-size:.78rem;
+    padding:7px 14px; border-radius:7px; display:none; pointer-events:none; z-index:6;
+    box-shadow:0 4px 14px rgba(0,0,0,.45);
+  }
+  #btnCal{border-color:var(--accent2); color:var(--accent2); margin-bottom:8px}
+  #btnCal:hover{background:var(--accent2); color:#201701}
+  #empty{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:#55607a; font-size:.9rem; text-align:center; padding:30px; pointer-events:none; line-height:1.7;
+  }
+  #hud{
+    position:absolute; left:12px; bottom:12px; background:rgba(20,24,30,.9);
+    border:1px solid var(--line); border-radius:8px; padding:7px 11px;
+    font-family:ui-monospace,monospace; font-size:.72rem; color:var(--muted);
+    pointer-events:none; white-space:pre;
+  }
+  #hud b{color:var(--accent2); font-weight:600}
+  .warn{
+    margin:0; padding:9px 16px; background:#2a2113; color:#ffcf7a;
+    font-size:.71rem; line-height:1.5; border-bottom:1px solid var(--line);
+  }
+  @media (max-width:760px){
+    body{flex-direction:column}
+    aside{width:auto; flex:0 0 auto; max-height:46vh; border-right:0; border-bottom:1px solid var(--line)}
+  }
+</style>
+</head>
+<body>
+<aside>
+  <h1>Key Decode Overlay
+    <small>Deviant Ollam decoding templates · CC BY-NC-SA</small>
+  </h1>
+
+  <p class="warn">Decoding or duplicating a key you do not own, without consent, is illegal. Authorized pentest, CTF and education use only.</p>
+
+  <div class="grp">
+    <label class="hdr" for="mfg">1 · Keyway / manufacturer</label>
+    <select id="mfg"></select>
+  </div>
+
+  <div class="grp">
+    <label class="hdr" for="file">2 · Photo of the key</label>
+    <input type="file" id="file" accept="image/*">
+    <p class="hint" style="margin:9px 0 0">Shoot the blade <b>flat-on and square</b>, off the keyring, with a credit card (ID-1) in frame for scale. Perspective skew is the main source of error.</p>
+  </div>
+
+  <div class="grp">
+    <label class="hdr">3 · Align template to the blade</label>
+    <button id="btnCal">⌖ Calibrate — click blade top, then bottom</button>
+    <div class="row"><label>Height</label><input type="range" id="sy" min="2" max="1500" step="0.1" value="100"><output id="syv"></output></div>
+    <div class="row"><label>Width</label><input type="range" id="sx" min="2" max="1500" step="0.1" value="100"><output id="sxv"></output></div>
+    <div class="row"><label>Rotate</label><input type="range" id="rot" min="-25" max="25" step="0.05" value="0"><output id="rotv"></output></div>
+    <div class="row"><label>Opacity</label><input type="range" id="op" min="10" max="100" step="1" value="85"><output id="opv"></output></div>
+    <div class="btns">
+      <button id="flip">Flip vertically</button>
+      <button id="reset">Reset</button>
+    </div>
+  </div>
+
+  <div class="grp">
+    <label class="hdr">How to read it</label>
+    <ol class="steps">
+      <li>Hit <b class="t">Calibrate</b> and click the blade's <b>uncut top edge</b>, then its <b>bottom edge</b>. Height, position and tilt are all set for you.</li>
+      <li><b>The datum is the flat run of blade top between the shoulder and the first cut</b> — not the peaks between cuts, which get truncated when neighbouring cuts are deep. Aim high by one step and every cut reads one number too shallow.</li>
+      <li>Depths measure <b>up from the blade bottom</b>, so <b>0</b> is the shallowest cut and the highest line.</li>
+      <li>Drop opacity to ~60% and read the <b>numbered line each cut valley bottoms out on</b>. Cuts number <b>from the bow/shoulder end</b>.</li>
+    </ol>
+    <p class="hint" style="margin:9px 0 0">Width is decoupled from height so you can stretch the template across the blade without disturbing the depth scale.</p>
+  </div>
+
+  <div class="grp ref">
+    <label class="hdr">Reference charts</label>
+    <a id="refMeas" href="#" target="_blank">Key measurements (specs) →</a>
+    <a id="refPin" href="#" target="_blank">Pinning chart →</a>
+    <a href="../DeviantOllam_Decoding/Devious%20Gauge%20Card/Devious%20Gauge%20Card.pdf" target="_blank">Devious Gauge Card (print 100%) →</a>
+  </div>
+
+  <div class="grp">
+    <p class="hint">
+      <b>Mouse:</b> drag the template to move it · wheel zooms the view · <kbd>Shift</kbd>+wheel scales template height.<br>
+      <b>Keys:</b> <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> nudge, <kbd>Shift</kbd> = 10×.
+    </p>
+  </div>
+</aside>
+
+<main id="main">
+  <div id="view">
+    <img id="photo" alt="">
+    <img id="tpl" alt="">
+    <div class="cal" id="cal1"><i class="h"></i><i class="v"></i></div>
+    <div class="cal" id="cal2"><i class="h"></i><i class="v"></i></div>
+  </div>
+  <div id="calmsg"></div>
+  <div id="empty">Choose a manufacturer and load a photo of a key to begin.</div>
+  <div id="hud"></div>
+</main>
+
+<script>
+const BRANDS = ["American","Arrow","BEST","Kwikset","Master","Sargent","Schlage","Weiser","Yale"];
+// Pinning-chart filenames do not all match the decoding-template names.
+const PINFILE = {
+  American:"Pin Chart - Master Lock and American Lock.jpg",
+  Arrow:"Pin Chart - Arrow.jpg",
+  BEST:null,
+  Kwikset:"Pin Chart - Kwikset.jpg",
+  Master:"Pin Chart - Master Lock and American Lock.jpg",
+  Sargent:"Pin Chart - Sargent.jpg",
+  Schlage:"Pin Chart - Schlage.jpg",
+  Weiser:"Pin Chart - Weiser.jpg",
+  Yale:"Pin Chart - Yale.jpg"
+};
+// Y positions of the two heavy reference lines (blade top / blade bottom) measured
+// directly from each 2007x609 template PNG.
+const HEAVY = {
+  American:[131.5,469.5], Arrow:[104.5,502.5], BEST:[109.5,493.5],
+  Kwikset:[99.5,497.5],   Master:[137.5,471.5], Sargent:[108.5,504.5],
+  Schlage:[90.5,506.5],   Weiser:[92.5,489.5],  Yale:[103.5,500.7]
+};
+const REPO = "../DeviantOllam_Decoding/";
+const $ = id => document.getElementById(id);
+const mfg=$("mfg"), photo=$("photo"), tpl=$("tpl"), view=$("view"),
+      empty=$("empty"), hud=$("hud");
+
+BRANDS.forEach(b=>{ const o=document.createElement("option"); o.value=o.textContent=b; mfg.appendChild(o); });
+mfg.value="Schlage";
+
+// template transform
+let T={x:60,y:60,sx:100,sy:100,rot:0,flip:1};
+// view transform
+let V={x:0,y:0,z:1};
+
+function applyTpl(){
+  tpl.style.transform =
+    `translate(${T.x}px,${T.y}px) rotate(${T.rot}deg) scale(${T.sx/100},${T.flip*T.sy/100})`;
+  tpl.style.opacity = $("op").value/100;
+  $("sxv").textContent = T.sx.toFixed(1)+"%";
+  $("syv").textContent = T.sy.toFixed(1)+"%";
+  $("rotv").textContent = T.rot.toFixed(2)+"°";
+  $("opv").textContent = $("op").value+"%";
+  drawHud();
+}
+function applyView(){
+  view.style.transform = `translate(${V.x}px,${V.y}px) scale(${V.z})`;
+  posMarks(); drawHud();
+}
+
+/* ---------- two-click calibration ---------- */
+let calState=0, calP1=null;
+const calmsg=$("calmsg");
+function msg(t){ calmsg.textContent=t; calmsg.style.display = t?"block":"none"; }
+function toStage(e){
+  const r=$("main").getBoundingClientRect();
+  return {x:(e.clientX-r.left-V.x)/V.z, y:(e.clientY-r.top-V.y)/V.z};
+}
+function posMarks(){
+  ["cal1","cal2"].forEach(id=>{
+    const el=$(id); if(el.style.display!=="block") return;
+    el.style.transform=`translate(${el.dataset.x}px,${el.dataset.y}px) scale(${1/V.z})`;
+  });
+}
+function mark(el,p){ el.style.display="block"; el.dataset.x=p.x; el.dataset.y=p.y; posMarks(); }
+function startCal(){
+  if(!photo.src){ msg("Load a photo first"); setTimeout(()=>msg(""),1600); return; }
+  calState=1; calP1=null;
+  document.body.classList.add("calibrating");
+  $("cal1").style.display=$("cal2").style.display="none";
+  msg("Click the UNCUT TOP edge of the blade  ·  Esc to cancel");
+}
+function endCal(){ calState=0; document.body.classList.remove("calibrating"); msg(""); }
+$("btnCal").addEventListener("click",startCal);
+
+$("main").addEventListener("click",e=>{
+  if(!calState) return;
+  const p=toStage(e);
+  if(calState===1){
+    calP1=p; mark($("cal1"),p); calState=2;
+    msg("Now click the BOTTOM edge of the blade  ·  Esc to cancel");
+  } else {
+    mark($("cal2"),p); applyCal(calP1,p); endCal();
+  }
+});
+
+function applyCal(p1,p2){
+  const hv=HEAVY[mfg.value]; if(!hv || !tpl.naturalHeight) return;
+  const dx=p2.x-p1.x, dy=p2.y-p1.y, span=Math.hypot(dx,dy);
+  if(span<4){ msg("Those two clicks were too close together"); setTimeout(()=>msg(""),2000); return; }
+  // the clicks run ACROSS the blade, so the blade axis is perpendicular to them
+  let deg = Math.atan2(dy,dx)*180/Math.PI - 90;
+  while(deg>90) deg-=180;
+  while(deg<-90) deg+=180;
+  deg = Math.max(-25, Math.min(25, deg));
+  const th = deg*Math.PI/180;
+
+  T.flip = 1;
+  T.rot  = deg;
+  T.sy   = Math.max(2, Math.min(1500, span/(hv[1]-hv[0])*100));
+  T.sx   = Math.max(2, Math.min(1500, photo.naturalWidth*1.15/tpl.naturalWidth*100));
+
+  // put the template's TOP heavy line through p1 (transform-origin is 0 0:
+  // scale, then rotate, then translate), then slide along the blade axis so the
+  // template's left end reaches the left edge of the photo.
+  const H = hv[0]*T.sy/100;
+  const s = -p1.x/Math.cos(th);
+  T.x = p1.x + H*Math.sin(th) + s*Math.cos(th);
+  T.y = p1.y - H*Math.cos(th) + s*Math.sin(th);
+
+  $("sy").value=T.sy; $("sx").value=T.sx; $("rot").value=T.rot;
+  applyTpl();
+}
+window.addEventListener("keydown",e=>{ if(e.key==="Escape" && calState) endCal(); });
+function drawHud(){
+  const h = tpl.naturalHeight ? (tpl.naturalHeight*T.sy/100) : 0;
+  hud.innerHTML = `view <b>${(V.z*100).toFixed(0)}%</b>   `+
+                  `template <b>${T.sy.toFixed(1)}%</b> (${h.toFixed(0)}px tall)   `+
+                  `rot <b>${T.rot.toFixed(2)}°</b>`;
+}
+
+function loadTemplate(){
+  const b = mfg.value;
+  tpl.src = REPO + "Key%20Decoding/" + encodeURIComponent(`Decoding - ${b}.png`);
+  tpl.style.display = "block";
+  $("refMeas").href = REPO + "Key%20Measurements/" + encodeURIComponent(`Key Measurements - ${b}.png`);
+  const pf = PINFILE[b];
+  const pin = $("refPin");
+  if(pf){ pin.href = REPO + "Pinning%20Charts/" + encodeURIComponent(pf); pin.style.display="block"; }
+  else { pin.style.display="none"; }
+  empty.style.display = photo.src ? "none" : "flex";
+}
+mfg.addEventListener("change", loadTemplate);
+
+$("file").addEventListener("change", e=>{
+  const f = e.target.files[0]; if(!f) return;
+  if(photo.src.startsWith("blob:")) URL.revokeObjectURL(photo.src);
+  photo.src = URL.createObjectURL(f);
+  photo.style.display="block";
+  photo.onload = ()=>{
+    empty.style.display="none";
+    // fit the photo in the viewport
+    const m=$("main").getBoundingClientRect();
+    V.z = Math.min(m.width/photo.naturalWidth, m.height/photo.naturalHeight)*0.92;
+    V.x = (m.width - photo.naturalWidth*V.z)/2;
+    V.y = (m.height - photo.naturalHeight*V.z)/2;
+    applyView();
+    // start the template at a sane size: ~1/3 the photo height
+    if(tpl.naturalHeight){
+      T.sy = T.sx = (photo.naturalHeight/3)/tpl.naturalHeight*100;
+      $("sy").value=T.sy; $("sx").value=T.sx;
+    }
+    T.x = photo.naturalWidth*0.05; T.y = photo.naturalHeight*0.35;
+    applyTpl();
+  };
+});
+
+// sliders
+$("sy").addEventListener("input",e=>{T.sy=+e.target.value; applyTpl();});
+$("sx").addEventListener("input",e=>{T.sx=+e.target.value; applyTpl();});
+$("rot").addEventListener("input",e=>{T.rot=+e.target.value; applyTpl();});
+$("op").addEventListener("input",applyTpl);
+$("flip").addEventListener("click",()=>{T.flip*=-1; applyTpl();});
+$("reset").addEventListener("click",()=>{
+  T={x:60,y:60,sx:100,sy:100,rot:0,flip:1};
+  $("sy").value=100; $("sx").value=100; $("rot").value=0; $("op").value=85;
+  $("cal1").style.display=$("cal2").style.display="none";
+  endCal(); applyTpl();
+});
+
+// drag the template
+let drag=null;
+tpl.addEventListener("pointerdown",e=>{
+  drag={px:e.clientX, py:e.clientY, ox:T.x, oy:T.y};
+  tpl.setPointerCapture(e.pointerId); tpl.classList.add("drag"); e.preventDefault();
+});
+tpl.addEventListener("pointermove",e=>{
+  if(!drag) return;
+  T.x = drag.ox + (e.clientX-drag.px)/V.z;
+  T.y = drag.oy + (e.clientY-drag.py)/V.z;
+  applyTpl();
+});
+["pointerup","pointercancel"].forEach(ev=>tpl.addEventListener(ev,e=>{
+  drag=null; tpl.classList.remove("drag");
+}));
+
+// pan the view by dragging the background
+let pan=null;
+$("main").addEventListener("pointerdown",e=>{
+  if(e.target===tpl || calState) return;
+  pan={px:e.clientX, py:e.clientY, ox:V.x, oy:V.y};
+});
+window.addEventListener("pointermove",e=>{
+  if(!pan) return;
+  V.x = pan.ox + (e.clientX-pan.px); V.y = pan.oy + (e.clientY-pan.py); applyView();
+});
+window.addEventListener("pointerup",()=>{pan=null;});
+
+// wheel: zoom view at cursor, or Shift = scale template height
+$("main").addEventListener("wheel",e=>{
+  e.preventDefault();
+  if(e.shiftKey){
+    T.sy = Math.min(400, Math.max(2, T.sy * (e.deltaY<0?1.01:1/1.01)));
+    $("sy").value=T.sy; applyTpl(); return;
+  }
+  const r=$("main").getBoundingClientRect();
+  const mx=e.clientX-r.left, my=e.clientY-r.top;
+  const k = e.deltaY<0 ? 1.1 : 1/1.1;
+  const nz = Math.min(40, Math.max(0.05, V.z*k));
+  V.x = mx - (mx-V.x)*(nz/V.z);
+  V.y = my - (my-V.y)*(nz/V.z);
+  V.z = nz; applyView();
+},{passive:false});
+
+// arrow-key nudge
+window.addEventListener("keydown",e=>{
+  if(/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+  const d = e.shiftKey?10:1, m={ArrowUp:[0,-d],ArrowDown:[0,d],ArrowLeft:[-d,0],ArrowRight:[d,0]}[e.key];
+  if(!m) return;
+  T.x+=m[0]; T.y+=m[1]; applyTpl(); e.preventDefault();
+});
+
+tpl.addEventListener("load",()=>{applyTpl();});
+loadTemplate(); applyTpl(); applyView();
+</script>
+</body>
+</html>
