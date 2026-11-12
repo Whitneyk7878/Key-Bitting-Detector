@@ -20,6 +20,8 @@
   }
   /* ---------- sidebar ---------- */
   aside{
+    --panel:#000000; --panel2:#000000; --line:#555555;
+    --fg:#ffffff; --muted:#aaaaaa; --accent:#ffffff; --accent2:#ffffff;
     width:310px; flex:0 0 310px; background:var(--panel); border-right:1px solid var(--line);
     display:flex; flex-direction:column; overflow-y:auto;
   }
@@ -47,10 +49,13 @@
   .row{display:flex; align-items:center; gap:9px; margin:9px 0}
   .row label{flex:0 0 74px; font-size:.78rem; color:var(--muted)}
   .row input[type=range]{flex:1; accent-color:var(--accent); min-width:0}
-  .row output{
-    flex:0 0 52px; text-align:right; font-variant-numeric:tabular-nums;
+  .row input.val{
+    flex:0 0 52px; width:52px; min-width:0; text-align:right; font-variant-numeric:tabular-nums;
     font-size:.74rem; color:var(--fg); font-family:ui-monospace,monospace;
+    background:transparent; border:0; border-radius:0; padding:0; margin:0;
+    outline:1px solid var(--line); outline-offset:2px;
   }
+  .row input.val:focus{outline-color:var(--accent)}
   .btns{display:flex; gap:8px; margin-top:4px}
   .hint{font-size:.74rem; color:var(--muted); line-height:1.55}
   .hint b{color:var(--fg); font-weight:600}
@@ -90,6 +95,7 @@
   }
   #btnCal{border-color:var(--accent2); color:var(--accent2); margin-bottom:8px}
   #btnCal:hover{background:var(--accent2); color:#201701}
+  aside #btnCal:hover{color:#000000}
   #empty{
     position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
     color:#55607a; font-size:.9rem; text-align:center; padding:30px; pointer-events:none; line-height:1.7;
@@ -105,6 +111,7 @@
     margin:0; padding:9px 16px; background:#2a2113; color:#ffcf7a;
     font-size:.71rem; line-height:1.5; border-bottom:1px solid var(--line);
   }
+  aside .warn{background:#ffffff; color:#000000}
   @media (max-width:760px){
     body{flex-direction:column}
     aside{width:auto; flex:0 0 auto; max-height:46vh; border-right:0; border-bottom:1px solid var(--line)}
@@ -133,10 +140,10 @@
   <div class="grp">
     <label class="hdr">3 · Align template to the blade</label>
     <button id="btnCal">⌖ Calibrate — click blade top, then bottom</button>
-    <div class="row"><label>Height</label><input type="range" id="sy" min="2" max="1500" step="0.1" value="100"><output id="syv"></output></div>
-    <div class="row"><label>Width</label><input type="range" id="sx" min="2" max="1500" step="0.1" value="100"><output id="sxv"></output></div>
-    <div class="row"><label>Rotate</label><input type="range" id="rot" min="-25" max="25" step="0.05" value="0"><output id="rotv"></output></div>
-    <div class="row"><label>Opacity</label><input type="range" id="op" min="10" max="100" step="1" value="85"><output id="opv"></output></div>
+    <div class="row"><label>Height</label><input type="range" id="sy" min="2" max="1500" step="0.1" value="100"><input type="text" class="val" id="syv" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="Height percent"></div>
+    <div class="row"><label>Width</label><input type="range" id="sx" min="2" max="1500" step="0.1" value="100"><input type="text" class="val" id="sxv" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="Width percent"></div>
+    <div class="row"><label>Rotate</label><input type="range" id="rot" min="-25" max="25" step="0.05" value="0"><input type="text" class="val" id="rotv" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="Rotation degrees"></div>
+    <div class="row"><label>Opacity</label><input type="range" id="op" min="10" max="100" step="1" value="85"><input type="text" class="val" id="opv" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="Opacity percent"></div>
     <div class="btns">
       <button id="flip">Flip vertically</button>
       <button id="reset">Reset</button>
@@ -158,7 +165,7 @@
     <label class="hdr">Reference charts</label>
     <a id="refMeas" href="#" target="_blank">Key measurements (specs) →</a>
     <a id="refPin" href="#" target="_blank">Pinning chart →</a>
-    <a href="../DeviantOllam_Decoding/Devious%20Gauge%20Card/Devious%20Gauge%20Card.pdf" target="_blank">Devious Gauge Card (print 100%) →</a>
+    <a href="DeviantOllam_Decoding/Devious%20Gauge%20Card/Devious%20Gauge%20Card.pdf" target="_blank">Devious Gauge Card (print 100%) →</a>
   </div>
 
   <div class="grp">
@@ -202,7 +209,7 @@ const HEAVY = {
   Kwikset:[99.5,497.5],   Master:[137.5,471.5], Sargent:[108.5,504.5],
   Schlage:[90.5,506.5],   Weiser:[92.5,489.5],  Yale:[103.5,500.7]
 };
-const REPO = "../DeviantOllam_Decoding/";
+const REPO = "DeviantOllam_Decoding/";
 const $ = id => document.getElementById(id);
 const mfg=$("mfg"), photo=$("photo"), tpl=$("tpl"), view=$("view"),
       empty=$("empty"), hud=$("hud");
@@ -215,14 +222,16 @@ let T={x:60,y:60,sx:100,sy:100,rot:0,flip:1};
 // view transform
 let V={x:0,y:0,z:1};
 
+// don't overwrite a value field while the user is typing in it
+function showVal(id,text){ const el=$(id); if(document.activeElement!==el) el.value=text; }
 function applyTpl(){
   tpl.style.transform =
     `translate(${T.x}px,${T.y}px) rotate(${T.rot}deg) scale(${T.sx/100},${T.flip*T.sy/100})`;
   tpl.style.opacity = $("op").value/100;
-  $("sxv").textContent = T.sx.toFixed(1)+"%";
-  $("syv").textContent = T.sy.toFixed(1)+"%";
-  $("rotv").textContent = T.rot.toFixed(2)+"°";
-  $("opv").textContent = $("op").value+"%";
+  showVal("sxv", T.sx.toFixed(1)+"%");
+  showVal("syv", T.sy.toFixed(1)+"%");
+  showVal("rotv", T.rot.toFixed(2)+"°");
+  showVal("opv", $("op").value+"%");
   drawHud();
 }
 function applyView(){
@@ -342,6 +351,39 @@ $("sy").addEventListener("input",e=>{T.sy=+e.target.value; applyTpl();});
 $("sx").addEventListener("input",e=>{T.sx=+e.target.value; applyTpl();});
 $("rot").addEventListener("input",e=>{T.rot=+e.target.value; applyTpl();});
 $("op").addEventListener("input",applyTpl);
+
+// typed values: click a number, type, Enter to apply (Esc cancels, Up/Down steps, Shift = 10x)
+function bindField(id, sliderId, get, set, dec, unit){
+  const el=$(id), sl=$(sliderId);
+  const min=+sl.min, max=+sl.max, step=+sl.step;
+  const fmt=v=>v.toFixed(dec)+unit;
+  const clamp=v=>Math.min(max, Math.max(min, dec? v : Math.round(v)));
+  const apply=v=>{ set(v); sl.value=v; applyTpl(); };
+  let dirty=false;   // only apply if the user actually typed, so just clicking in/out never alters a value
+  el.addEventListener("focus",()=>el.select());
+  el.addEventListener("input",()=>{ dirty=true; });
+  el.addEventListener("blur",()=>{
+    const v=parseFloat(el.value);
+    if(dirty && !isNaN(v)) apply(clamp(v));
+    dirty=false;
+    el.value=fmt(get());
+  });
+  el.addEventListener("keydown",e=>{
+    if(e.key==="Enter"){ el.blur(); }
+    else if(e.key==="Escape"){ dirty=false; el.blur(); }
+    else if(e.key==="ArrowUp"||e.key==="ArrowDown"){
+      e.preventDefault();
+      const cur=parseFloat(el.value); const base=isNaN(cur)?get():cur;
+      const d=step*(e.shiftKey?10:1)*(e.key==="ArrowUp"?1:-1);
+      const v=clamp(Math.round((base+d)*1e4)/1e4);
+      apply(v); dirty=false; el.value=fmt(get()); el.select();
+    }
+  });
+}
+bindField("syv","sy",()=>T.sy,v=>{T.sy=v},1,"%");
+bindField("sxv","sx",()=>T.sx,v=>{T.sx=v},1,"%");
+bindField("rotv","rot",()=>T.rot,v=>{T.rot=v},2,"°");
+bindField("opv","op",()=>+$("op").value,v=>{},0,"%");
 $("flip").addEventListener("click",()=>{T.flip*=-1; applyTpl();});
 $("reset").addEventListener("click",()=>{
   T={x:60,y:60,sx:100,sy:100,rot:0,flip:1};
